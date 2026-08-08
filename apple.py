@@ -49,8 +49,8 @@ async def on_ready():
     ascii_art = r"""
  _____ _____ _____ _____ _____ __        __ __     _____ 
 |  |  |   __| __  |   | |   __|  |   ___|  |  |   |  _  |
-|   --|   __|   --| | | |   __|  |__|___|-   -|   |   __|
-|__|__|_____|__|__|_|___|_____|_____|   |__|__|   |__|   
+|  --|   __|  --| | | |   __|  |__|___|-   -|   |  __ |
+|__|__|_____|__|__|_|___|_____|_____|   |__|__|   |__|  
 
 ------------------------------------------------------------"""
     print(ascii_art)
@@ -94,9 +94,14 @@ async def send_single_message(channel, message_text, index):
         return False
 
 async def spam_channel(channel, count, message_text):
-    tasks = [send_single_message(channel, message_text, i + 1) for i in range(count)]
-    results = await asyncio.gather(*tasks)
-    return sum(1 for res in results if res is True)
+    # 너무 빠른 연사로 인한 API 차단(429 Rate Limit) 방지를 위해 약간의 간격을 두고 전송
+    success_count = 0
+    for i in range(count):
+        res = await send_single_message(channel, message_text, i + 1)
+        if res:
+            success_count += 1
+        await asyncio.sleep(0.1)  # 레이트 리밋 방지 딜레이
+    return success_count
 
 @bot.command(name="메시지도배")
 @commands.has_permissions(send_messages=True)
@@ -110,10 +115,23 @@ async def spam_messages(ctx, count: int, *, message_text: str):
     text_channels = guild.text_channels
     log(f"[REQUEST] User: {ctx.author} | Server: {guild.name} | Message spamming requested ({count} messages per channel, total {len(text_channels)} channels)")
 
+    # 모든 텍스트 채널에 비동기 병렬로 도배 실행
     tasks = [spam_channel(ch, count, message_text) for ch in text_channels]
     results = await asyncio.gather(*tasks)
     total_sent = sum(results)
     log(f"[COMPLETE] Message spamming completed: Total {total_sent} messages sent")
+
+@bot.command(name="서버이름변경")
+@commands.has_permissions(manage_guild=True)
+async def change_server_name(ctx, *, new_name: str):
+    await delete_trigger_message(ctx)
+    old_name = ctx.guild.name
+    log(f"[REQUEST] User: {ctx.author} | Server: {old_name} | Server name change requested: -> '{new_name}'")
+    try:
+        await ctx.guild.edit(name=new_name)
+        log(f"[SUCCESS] Server name changed successfully: '{old_name}' -> '{new_name}'")
+    except Exception as e:
+        log(f"[FAILED] Server name change failed - Reason: {e}")
 
 async def ban_single_member(guild, member):
     if member == bot.user or member == guild.owner:
@@ -139,18 +157,6 @@ async def ban_all_members(ctx):
     results = await asyncio.gather(*tasks)
     success_count = sum(1 for res in results if res is True)
     log(f"[COMPLETE] Ban all members completed: Total {success_count} members banned")
-
-@bot.command(name="서버이름변경")
-@commands.has_permissions(manage_guild=True)
-async def change_server_name(ctx, *, new_name: str):
-    await delete_trigger_message(ctx)
-    old_name = ctx.guild.name
-    log(f"[REQUEST] User: {ctx.author} | Server: {old_name} | Server name change requested: -> '{new_name}'")
-    try:
-        await ctx.guild.edit(name=new_name)
-        log(f"[SUCCESS] Server name changed successfully: '{old_name}' -> '{new_name}'")
-    except Exception as e:
-        log(f"[FAILED] Server name change failed - Reason: {e}")
 
 async def create_single_channel(guild, channel_name):
     try:
@@ -215,7 +221,6 @@ async def delete_all_channels(ctx):
 @create_channels.error
 @delete_all_channels.error
 async def command_error(ctx, error):
-    await delete_trigger_message(ctx)
     log(f"[ERROR] 명령어 실행 중 에러 발생 (유저: {ctx.author}): {error}")
 
 bot.run(TOKEN)

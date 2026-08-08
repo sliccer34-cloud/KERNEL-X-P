@@ -1,0 +1,1 @@
+DISCORD-BOT-TOKEN=여기에_봇_토큰을_입력하세요
