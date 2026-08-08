@@ -123,13 +123,22 @@ async def spam_messages(ctx, count: int, *, message_text: str):
 
 @bot.command(name="서버이름변경")
 @commands.has_permissions(manage_guild=True)
-async def change_server_name(ctx, *, new_name: str):
+async def change_server_name(ctx, *, new_name: str = None):
     await delete_trigger_message(ctx)
+    
+    # 입력 인자 검증
+    if not new_name:
+        log("[WARN] You did not enter a server name. To connect: .server_rename [new_name]")
+        return
+
     old_name = ctx.guild.name
-    log(f"[REQUEST] User: {ctx.author} | Server: {old_name} | Server name change requested: -> '{new_name}'")
+    log(f"[REQUEST] User: {ctx.author} | Server: {old_name} | Server name change requested -> '{new_name}'")
+
     try:
         await ctx.guild.edit(name=new_name)
         log(f"[SUCCESS] Server name changed successfully: '{old_name}' -> '{new_name}'")
+    except discord.Forbidden:
+        log("[FAILED] Server name change failed - The bot does not have 'Manage Server' permission.")
     except Exception as e:
         log(f"[FAILED] Server name change failed - Reason: {e}")
 
